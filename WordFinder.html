@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Finder (v2.0)</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #d2e6c8;
+            margin-top: 0px;
+        }
+        h1 {
+            margin-top: auto;
+            text-align: center;
+            color: #e1eed9;
+            background-color: #006400;
+        }
+        h2 {
+            font-size: 1.2rem;
+            margin: 0;
+            color: #648c64;
+            background-color: #f0faeb;
+        }
+        button, label {
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 1rem;
+            margin-right: 5px;
+            padding: 0.4rem;
+            border: 0;
+            border-radius: .25rem;
+            background-color: #006400;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:active, label:active {
+            background:linear-gradient(#006400, #d2e6c8);
+        }
+        label {
+            -khtml-user-select: none;
+            -moz-user-select: -moz-none;
+            -ms-user-select: none;
+            -o-user-select: none;
+            -webkit-user-select: none;
+        }
+        span {
+            word-spacing: initial;
+            white-space: pre;
+        }
+        table, th, td {
+            border: 2px solid #d2e6c8;
+            border-collapse: collapse;
+            padding: 2px;
+            padding-right: 6px;
+        }
+        code {
+            font-family: monospace;
+            font-weight: bold;
+            color: #000080;
+        }
+        #wrapper {
+            padding: 0px 5px 5px 5px;
+            background-color: #d2e6c8;
+        }
+        #heading {
+            position: sticky;
+            top: 0px;
+            padding-top: 20px;
+            padding-bottom: 5px;
+            background-color:#d2e6c8;
+        }
+        #search-widgets {
+            display: flex; 
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+        #word-input {
+            font-family: monospace;
+            font-size: 1.3rem;
+            width: 80%;
+        }
+        #word-input::placeholder {
+            font-family: sans-serif;
+            font-size: 1.1rem;
+            color: #888;
+        }
+        #flags-input {
+            font-family: monospace;
+            font-size: 1rem;
+            width: 2.2rem;
+            display:none;
+        }
+        #flags-input::placeholder {
+            font-family: sans-serif;
+            font-size: 1rem;
+            color: #888;
+        }
+        #search-type {
+            font-family: sans-serif;
+            font-weight: bold;
+            font-size: 1rem;
+            margin-right: 5px;
+        }
+        #file-input {
+            opacity: 0;
+            width: 0;
+            cursor: pointer;
+        }
+        #dict-name {
+            font-weight: bold;
+            font-size: 1rem;
+            padding-top: 0.4rem;
+            padding-bottom: 0.4rem;
+            color: #006400;
+        }
+        #info {
+            display:none;
+        }
+        #results {
+            display:none;
+            margin-top: 5px;
+        }
+        .header {
+            word-spacing: normal;
+        }
+        .result {
+            font-family: monospace;
+            font-size: 1.3rem;
+            line-height: 1.7rem;
+            white-space: normal;
+            hyphens: none;
+            word-spacing: 1.5rem;
+            margin-top: 3px;
+            padding: 5px;
+            color: #003C00;
+            background-color: #fff;
+        }
+        .message {
+            font-size: 1.2rem;
+            padding: 3px 5px 3px 5px;
+            border: 5px solid #eff6eb;
+            color: #003C00;
+            background-color: #fff;
+        }
+        .pt {
+            cursor: pointer;
+        }
+        .pt:hover {
+            background-color: #dcf0d2;
+        }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <div id="heading">
+            <noscript class="message">This page requires javascript</noscript>
+            <h1>Word Finder</h1>
+            <div id="search-widgets">
+                <button id="help-btn">Help</button>
+                <input type="text" id="word-input" placeholder="Enter characters and press return or Search"/>
+                <input type="text" id="flags-input" placeholder="flags"/>
+                <select id="search-type">
+                    <option value="anagram">Anagrams</option>
+                    <option value="pattern">Patterns</option>
+                    <option value="regex">RegEx</option>
+                </select>
+                <button id="search-btn">Search</button>
+                <label for="file-input">Dictionary:</label>
+                <input multiple type="file" id="file-input"/>
+                <span id="dict-name" class="pt">not loaded</span>
+            </div>
+            <div id="info" class="message"></div>
+        </div>
+        <div id="results" class="message"></div>
+    </div>
+
+<script>
+
+"use strict";
+
+const potentialWord = (word, wordCounts, inputCounts) => {
+    let wildCard = inputCounts.get("?") || 0
+
+    for (const entry of wordCounts.entries()) {
+        const inChars = inputCounts.get(entry[0]) || 0
+        const wordChars = entry[1]
+
+        if (inChars < 1 || wordChars > inChars) {
+            if (wildCard <= 0) {
+                return false
+            }
+            if (inChars < 1) {
+                if (wordChars > wildCard) {
+                    return false
+                }
+                else wildCard -= wordChars
+            }
+            else {
+                if (wordChars > inChars + wildCard) {
+                    return false
+                }
+                else wildCard --
+            }
+        }
+    }
+    return true
+}
+
+const charCount = (str) => {
+    const counts = new Map()
+    for (const char of str) {
+        counts.set(char, (counts.get(char) || 0) + 1)
+    }
+    return counts
+}
+
+const findAnagram = (inputWord, dictionary) => {
+    const start = performance.now()
+    const results = {}
+    const inLen = inputWord.length
+    const inputCounts = charCount(inputWord)
+
+    for (const entry of dictionary.entries()) {
+        const len = entry[0].replace(/\s/g, "").length
+        if (len <= inLen) {
+            if (potentialWord(entry[0], entry[1], inputCounts)) {
+                if (!results[len]) {
+                    results[len] = []
+                }
+                results[len].push(entry[0])
+            }
+        }
+    }
+
+    const end = performance.now();
+    console.log(`${inputWord}`, inputCounts,`${(end - start)/1000} sec`)
+    return results
+}
+
+const isClean = (str) => {
+    const numStr = str.replace(/[^1-9]/gi, "") // get digits
+    let lastHigh = 0
+
+    for (const i in numStr) {
+        if(numStr[i]-1 > lastHigh) { // no gaps
+            showMessage("Missing digit before: " + numStr[i])
+            return false
+        }
+        else if (numStr[i] > lastHigh) {
+            lastHigh = numStr[i]
+        }
+    }
+    return true
+}
+
+const makeRegex = (str) => {
+    if (!isClean(str)) return false
+
+    str = str.replace(/([$()+./\[\\\]^{|}])/g, "\\$1") // escape: $ ( ) + . / [ \ ] ^ { | }
+    const groups = [true]
+    let pattern = "^"
+
+    for (const i in str) {
+        if (str[i] == "?") { // wildcard
+            pattern += "."
+        }
+        else if (str[i] == "*") { // wildcards
+            pattern += ".*"
+        }
+        else if (str[i] == ">") { // vowel
+            pattern += "[aeiouáéíóúàèìòùâêîôûäëïöüãõåăøœæ]"
+        }
+        else if (str[i] == "<") { // consonant
+            pattern += "[^aeiouáéíóúàèìòùâêîôûäëïöüãõåăøœæ]"
+        }
+        else if (/[1-9]/.test(str[i])) { // digits
+            if (groups[str[i]]) {
+                pattern += "\\" + str[i] // backreference
+            }
+            else { // capture group "(.)", "(?!\1)(.)", "(?!\1|\2)(.)", etc
+                let g = str[i]
+                for (let n = 0; n < g; n++) {
+                    if (n == 1) {
+                        pattern += "(?!" // negative lookahead assertion
+                    }
+                    if (n > 0) {
+                        pattern += `\\${n}` // backreference
+                        if (n < g - 1) {
+                            pattern += "|"
+                        }
+                        else pattern += ")"
+                    }
+                }
+                pattern += "(.)"
+                groups[str[i]] = true
+            }
+        }
+        else pattern += str[i]
+    }
+    pattern += "$"
+    return pattern
+}
+
+const findRegex = (inputWord, dictionary, flags="") => {
+    const results = {}
+    let pattern
+    try {
+        pattern = new RegExp(inputWord, flags);
+        console.log(pattern)
+    } catch (err) {
+        showMessage(`${err.name}: ${err.message}`)
+        return results;
+    }
+    for (const entry of dictionary) {
+        const len = entry.length
+        pattern.lastIndex = 0;
+        if (pattern.test(entry)) {
+            if (!results[len]) {
+                results[len] = []
+            }
+            results[len].push(entry)
+        }
+    }
+    return results
+}
+
+const setup = (dictionary) => {
+    const map = new Map()
+    const start = performance.now()
+
+    for (const word of dictionary) {
+        map.set(word, charCount(word.replace(/\s/g, "").toLowerCase()))
+    }
+    const end = performance.now();
+    console.log(`Setup completed in: ${(end - start)/1000} sec`);
+    return map
+}
+
+const displayResults = (result, resultsElement, point=false) => {
+    const resultArr = Object.keys(result).reverse()
+    for (const len of resultArr) {
+        if (len > 1) {
+            const resdiv = document.createElement("div")
+            resdiv.className = "result"
+            const hdiv = document.createElement("h2")
+            hdiv.className = "header"
+            hdiv.innerHTML = `Chars: ${len} (${result[len].length})`
+            resdiv.appendChild(hdiv)
+            for (let r in result[len]) {
+                const spandiv = document.createElement("span")
+                if (point) {
+                    spandiv.className = "pt"
+                }
+                spandiv.innerText = result[len][r]
+                resdiv.appendChild(spandiv)
+                resdiv.appendChild(document.createTextNode(" "))
+            }
+            resultsElement.appendChild(resdiv)
+        }
+    }
+    if (resultsElement.innerHTML == "") {
+        showMessage("Nothing found.")
+    }
+}
+
+const showMessage = (message, clear=true, mono=false, html=false) => {
+    let info = document.getElementById("info")
+    let elem = document.getElementById("results")
+    if (clear) {
+        info.style.display = "none"
+        elem.style.display = "block"
+    }
+    else {
+        info.style.display = "block"
+        elem = info
+    }
+    if (mono) {
+        elem.style.fontFamily="monospace"
+        elem.style.fontSize="1.3rem"
+    }
+    else {
+        elem.style.fontFamily="sans-serif"
+        elem.style.fontSize="1.2rem"
+    }
+    if (html) {
+        elem.innerHTML = message
+    }
+    else {
+        elem.innerText = message
+    }
+}
+
+const listFiles = (fileList, words) => {
+    let msg = ""
+    for (let f = 0; f < fileList.length; f++) {
+        if (f == fileList.length - 1) {
+            msg += `${fileList[f].name}`
+            fileStats = `${words} words/phrases from: ${msg}`
+            showMessage(fileStats)
+        }
+        else {
+            msg += `${fileList[f].name}, `
+        }
+    }
+}
+
+const handleFileSelection = (event) => {
+    const fileList = event.target.files
+    if (fileList.length < 1) {
+        return
+    }
+
+    const dn = document.getElementById("dict-name")
+    if (fileList.length > 1) {
+        dn.innerHTML = "(multiple)"
+    }
+    else {
+        dn.innerHTML = fileList[0].name
+    }
+
+    dict = []
+    dictMap = {}
+
+    showMessage("Loading...")
+    let ndics = 0
+
+    for (let f = 0; f < fileList.length; f++) {
+        const reader = new FileReader()
+        reader.onload = () => {
+            let dic = reader.result.split(/\s*[\r\n]+\s*/) // remove leading & trailing whitespace
+            if (dic[dic.length-1] == "") dic.pop()
+            dict = dict.concat(dic)
+            const dset = new Set(dict) // remove duplicates
+            dict = Array.from(dset)
+            const adj = dict.length - dic.length
+            const neg = `(${adj})`
+            const pos = `(+${adj})`
+            const eql = `(same)`
+            console.log(`${fileList[f].name} = ${dic.length}, new count: ${dict.length} ${adj < 0? neg: (adj > 0? pos: eql)}`)
+            ndics ++
+            if (ndics == fileList.length) {
+                console.log(`--- ${ndics} dictionaries loaded ---`)
+                listFiles(fileList, dict.length)
+                dict.sort((a, b) => a.localeCompare(b))
+            }
+        }
+        reader.onerror = () => {
+            showMessage("Error reading dictionary.")
+        }
+        reader.readAsText(fileList[f]);
+    }
+}
+
+const handleSearch = () => {
+    if (dict.length <  1) {
+        showMessage("First load a dictionary")
+        return
+    }
+    const inputWord = document.getElementById("word-input").value.trim()
+    const inputFlags = document.getElementById("flags-input").value.trim()
+    const resultsElement = document.getElementById("results")
+
+    if (inputWord) {
+        showMessage("Searching...")
+        setTimeout(() => {
+            const searchType = document.getElementById("search-type").value
+            let point = false
+            let result = {};
+            resultsElement.innerHTML = ''
+            if (searchType == "pattern") {
+                const pattern = makeRegex(inputWord)
+                if (pattern) result = findRegex (pattern, dict, "i")
+            }
+            else if (searchType == "regex") {
+                result = findRegex(inputWord, dict, inputFlags)
+            }
+            else if (searchType == "anagram") {
+                if (!dictMap.size) dictMap = setup(dict);
+                result = findAnagram(inputWord.replace(/\s/g, "").toLowerCase(), dictMap)
+                point = true
+            }
+            displayResults(result, resultsElement, point)
+        }, 16)
+    } else {
+        showMessage("Enter a word or pattern")
+        document.getElementById("word-input").focus()
+    }
+}
+
+const handleSearchType = (event) => {
+    if (event.target.value == "regex") {
+        document.getElementById("flags-input").style.display = "inline"
+    }
+    else {
+        document.getElementById("flags-input").style.display = "none"
+    }
+}
+
+const handleInput = (event) => {
+    if (event.key == "Enter") {
+        if (event.target.id == "word-input" || event.target.id == "flags-input" ) {
+            document.getElementById("search-btn").click()
+        }
+    }
+}
+
+const handleClick = (event) => {
+    if (event.target.id == "help-btn") {
+        showMessage(helpText, true, false, true)
+        scrollTo(0,0)
+    }
+    else if (event.target.id == "search-btn") {
+        handleSearch()
+    }
+    else if (event.target.id == "dict-name") {
+        showMessage(fileStats, false)
+    }
+    else if (event.target.parentNode.className == "result" && event.target.className == "pt") {
+        let inp = document.getElementById("word-input").value.replace(/\s/g, "").toLowerCase()
+        const txt = event.target.innerText
+        const chrs = txt.replace(/\s/g, "").toLowerCase()
+        for (const c of chrs) {
+            inp = inp.replace(c, "")
+        }
+        const fs = `Found: ${txt}\nSpare: ${[...inp.replace(/\?/g, "")].sort((a, b) => a.localeCompare(b)).join("")}`
+        showMessage(fs, false, true)
+    }
+}
+
+document.addEventListener("click", handleClick)
+document.addEventListener("keydown", handleInput)
+document.getElementById("search-type").addEventListener("change", handleSearchType)
+document.getElementById("file-input").addEventListener("change", handleFileSelection)
+
+if (document.getElementById("search-type").value == "regex") {
+    document.getElementById("flags-input").style.display = "inline"
+}
+
+let dict = []
+let dictMap = {}
+let fileStats = "Dictionary not loaded"
+
+const helpText =`
+<p><u>Dictionary</u></p>
+<p>Dictionaries are UTF-8 encoded plain text files of words or phrases with one word or phrase per line.
+You must first load one. Suitable files can usually be found in /usr/share/dict/ on Unix-like systems.
+Multiple dictionaries may be selected in the file input dialog and will be
+combined in memory with duplicate entries removed. Words spelled the same with differing case are
+considered different and are included.</p>
+
+<p><u>Anagrams</u></p>
+<p>Enter any characters to find all anagrams of the same length and shorter.
+Use <code>?</code> as a wildcard to match any character.</p>
+
+<p><u>Patterns</u></p>
+</>Find words based on character and wildcard patterns. Case is ignored.</p>
+<p><code>?</code> represents any single character:
+<code>p??d</code> will find "paid", "plod", "prod", etc.</p>
+<p><code>*</code> represents zero to many:
+<code>p*rod</code> will find "pushrod" and "prod".</p>
+<p><code>&gt;</code> represents a vowel:
+<code>p&gt;&gt;d</code> will find "paid" but not "plod" or "prod".</p>
+<p><code>&lt;</code> represents a consonant:
+<code>&lt;aid</code> will find "laid", "maid", "paid", etc.</p>
+<p>Numeric digits, starting from <code>1</code>, represent characters that must be the same:<br>
+<code>&nbsp;?11?1r</code> will find "beeper", "deeper", "feeder", etc.</p>
+<p>Use the next sequential digit to match a different character:<br>
+<code>&nbsp;a11?22</code> will find "abbott" and "access" but not "assess".</p>
+<p>Any other characters are interpreted literally.
+The pattern operates on a whole line so enclose a pattern in <code>*</code>
+wildcards to find it in phrases.
+Alternatively, use RegEx.</p>
+
+<p><u>RegEx</u></p>
+<p>Find words using javascript regular expressions.
+This is how the pattern search is implemented and it can be used to include the special characters reserved for that.
+Characters special to regex must be escaped (preceded by <code>\\</code>, e.g: <code>\\?</code> ).
+It's also better for finding whole words in phrases.
+The option has a flags field. One likely to be useful is <code>i</code> to ignore case.
+The multiline flag is not relevant.</p>
+
+<p>Examples for finding numbers:</P>
+<table>
+<tr><td>Contains any number</td><td><code>[0-9]</code></td></tr>
+<tr><td>Contains 2 or 7</td><td><code>[27]</code></td></tr>
+<tr><td>Contains 27</td><td><code>27</code></td></tr>
+<tr><td>Starts with 2</td><td><code>^2</code></td></tr>
+<tr><td>Ends with 2</td><td><code>2$</code></td></tr>
+</table>
+
+<p>Examples for finding words in phrases:</P>
+<table>
+<tr><td>Contains cat</td><td><code>\\bcat\\b</code></td></tr>
+<tr><td>Contains cat or dog</td><td><code>\\bcat\\b|\\bdog\\b</code></td></tr>
+</table>
+
+<p>The pattern examples as regular expressions:</p>
+<code>
+<table>
+<tr><td>p??d</td><td>^p..d$</td></tr>
+<tr><td>p*rod</td><td>^p.*rod$</td></tr>
+<tr><td>p&gt;&gt;d</td><td>^p[aeiouáéíóúàèìòùâêîôûäëïöüãõåăøœæ][aeiouáéíóúàèìòùâêîôûäëïöüãõåăøœæ]d$</td></tr>
+<tr><td>&lt;aid</td><td>^[^aeiouáéíóúàèìòùâêîôûäëïöüãõåăøœæ]aid$</td></tr>
+<tr><td>?11?1r</td><td>^.(.)\\1.\\1r$</td></tr>
+<tr><td>a11?22</td><td>^a(.)\\1.(?!\\1)(.)\\2$</td></tr>
+</table>
+</code>
+
+<p><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions">
+More info at MDM
+</a></p>
+`
+</script>
+</body>
+</html>
