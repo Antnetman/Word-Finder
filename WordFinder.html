@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Finder (v2.0)</title>
+    <title>Word Finder (v3.0)</title>
     <style>
         body {
             font-family: sans-serif;
@@ -143,10 +143,10 @@
             color: #003C00;
             background-color: #fff;
         }
-        .pt {
+        #dict-name, .rs, .fs, #spare {
             cursor: pointer;
         }
-        .pt:hover {
+        #dict-name:hover, .rs:hover, .fs:hover, #spare:hover {
             background-color: #dcf0d2;
         }
     </style>
@@ -168,7 +168,7 @@
                 <button id="search-btn">Search</button>
                 <label for="file-input">Dictionary:</label>
                 <input multiple type="file" id="file-input"/>
-                <span id="dict-name" class="pt">not loaded</span>
+                <span id="dict-name">not loaded</span>
             </div>
             <div id="info" class="message"></div>
         </div>
@@ -244,7 +244,7 @@ const isClean = (str) => {
 
     for (const i in numStr) {
         if(numStr[i]-1 > lastHigh) { // no gaps
-            showMessage("Missing digit before: " + numStr[i])
+            findErr = `Missing digit before: ${numStr[i]}`
             return false
         }
         else if (numStr[i] > lastHigh) {
@@ -309,7 +309,7 @@ const findRegex = (inputWord, dictionary, flags="") => {
         pattern = new RegExp(inputWord, flags);
         console.log(pattern)
     } catch (err) {
-        showMessage(`${err.name}: ${err.message}`)
+        findErr = `${err.name}: ${err.message}`
         return results;
     }
     for (const entry of dictionary) {
@@ -339,6 +339,7 @@ const setup = (dictionary) => {
 
 const displayResults = (result, resultsElement, point=false) => {
     const resultArr = Object.keys(result).reverse()
+    resultsElement.innerHTML = ""
     for (const len of resultArr) {
         if (len > 1) {
             const resdiv = document.createElement("div")
@@ -350,7 +351,7 @@ const displayResults = (result, resultsElement, point=false) => {
             for (let r in result[len]) {
                 const spandiv = document.createElement("span")
                 if (point) {
-                    spandiv.className = "pt"
+                    spandiv.className = "rs"
                 }
                 spandiv.innerText = result[len][r]
                 resdiv.appendChild(spandiv)
@@ -360,11 +361,26 @@ const displayResults = (result, resultsElement, point=false) => {
         }
     }
     if (resultsElement.innerHTML == "") {
-        showMessage("Nothing found.")
+        if (fromSpare) {
+            const info = document.getElementById("info")
+            if (info.lastElementChild.firstChild.data != "(no more)") {
+                const msg = document.createElement("div")
+                msg.innerText = "(no more)"
+                info.appendChild(msg)
+                resultsElement.style.display = "none"
+            }
+        }
+        else {
+            showMessage("Nothing found.")
+            resultsElement.style.display = "none"
+        }
+    }
+    else {
+        resultsElement.style.display = "block"
     }
 }
 
-const showMessage = (message, clear=true, mono=false, html=false) => {
+const showMessage = (message, clear=false, mono=false, html=false) => {
     let info = document.getElementById("info")
     let elem = document.getElementById("results")
     if (clear) {
@@ -396,7 +412,7 @@ const listFiles = (fileList, words) => {
     for (let f = 0; f < fileList.length; f++) {
         if (f == fileList.length - 1) {
             msg += `${fileList[f].name}`
-            fileStats = `${words} words/phrases from: ${msg}`
+            fileStats = `${words} entries from: ${msg}`
             showMessage(fileStats)
         }
         else {
@@ -411,6 +427,9 @@ const handleFileSelection = (event) => {
         return
     }
 
+    document.getElementById("results").style.display = "none"
+    showMessage("Loading...")
+
     const dn = document.getElementById("dict-name")
     if (fileList.length > 1) {
         dn.innerHTML = "(multiple)"
@@ -422,7 +441,6 @@ const handleFileSelection = (event) => {
     dict = []
     dictMap = {}
 
-    showMessage("Loading...")
     let ndics = 0
 
     for (let f = 0; f < fileList.length; f++) {
@@ -457,17 +475,16 @@ const handleSearch = () => {
         showMessage("First load a dictionary")
         return
     }
-    const inputWord = document.getElementById("word-input").value.trim()
+    const inputWord = document.getElementById("word-input").value //.trim()
     const inputFlags = document.getElementById("flags-input").value.trim()
     const resultsElement = document.getElementById("results")
 
     if (inputWord) {
-        showMessage("Searching...")
+        showMessage("Searching...", true)
         setTimeout(() => {
             const searchType = document.getElementById("search-type").value
             let point = false
             let result = {};
-            resultsElement.innerHTML = ''
             if (searchType == "pattern") {
                 const pattern = makeRegex(inputWord)
                 if (pattern) result = findRegex (pattern, dict, "i")
@@ -480,7 +497,13 @@ const handleSearch = () => {
                 result = findAnagram(inputWord.replace(/\s/g, "").toLowerCase(), dictMap)
                 point = true
             }
-            displayResults(result, resultsElement, point)
+            if (findErr) {
+                showMessage(findErr, true)
+                findErr = ""
+            }
+            else {
+                displayResults(result, resultsElement, point)
+            }
         }, 16)
     } else {
         showMessage("Enter a word or pattern")
@@ -511,20 +534,73 @@ const handleClick = (event) => {
         scrollTo(0,0)
     }
     else if (event.target.id == "search-btn") {
+        fromSpare = false
         handleSearch()
     }
     else if (event.target.id == "dict-name") {
-        showMessage(fileStats, false)
+        if (fromSpare) {
+            document.getElementById("results").style.display = "none"
+        }
+        showMessage(fileStats)
     }
-    else if (event.target.parentNode.className == "result" && event.target.className == "pt") {
-        let inp = document.getElementById("word-input").value.replace(/\s/g, "").toLowerCase()
-        const txt = event.target.innerText
-        const chrs = txt.replace(/\s/g, "").toLowerCase()
+    else if (event.target.className == "rs") {
+        let inp
+        if (fromSpare) {
+            inp = document.getElementById("spare").innerText
+        }
+        else {
+            inp = document.getElementById("word-input").value.replace(/\s/g, "").toLowerCase()
+        }
+        let word = event.target.innerText
+        const chrs = word.replace(/\s/g, "").toLowerCase()
         for (const c of chrs) {
             inp = inp.replace(c, "")
         }
-        const fs = `Found: ${txt}\nSpare: ${[...inp.replace(/\?/g, "")].sort((a, b) => a.localeCompare(b)).join("")}`
-        showMessage(fs, false, true)
+        inp = [...inp.replace(/\?/g, "")].sort((a, b) => a.localeCompare(b)).join("")
+        let foundiv
+        if (fromSpare) {
+            foundiv = document.getElementById("found")
+            document.getElementById("results").style.display = "none"
+        }
+        else {
+            foundiv = document.createElement("div")
+            foundiv.id = "found"
+            foundiv.innerText = "found: "
+            foundiv.style.wordSpacing = "1.5rem"
+        }
+        const fsdiv = document.createElement("span")
+        fsdiv.className = "fs"
+        fsdiv.innerText = word
+        foundiv.appendChild(fsdiv)
+        foundiv.appendChild(document.createTextNode(" "))
+
+        const chardiv = document.createElement("div")
+        chardiv.innerText = "Spare: "
+        chardiv.style.wordSpacing = "1.5rem"
+        const cspdiv = document.createElement("span")
+        cspdiv.id = "spare"
+        cspdiv.innerText = inp
+        chardiv.appendChild(cspdiv)
+
+        info.innerHTML = ""
+        info.style.fontFamily="monospace"
+        info.style.fontSize="1.3rem"
+        info.style.display = "block"
+        info.appendChild(foundiv)
+        info.appendChild(chardiv)
+    }
+    else if (event.target.id == "spare") {
+        fromSpare = true
+        scrollTo(0,0)
+        const result = findAnagram(event.target.innerText, dictMap)
+        const resultsElement = document.getElementById("results")
+        displayResults(result, resultsElement, true)
+    }
+    else if (event.target.className == "fs") {
+        const cspdiv = document.getElementById("spare")
+        let chrs = cspdiv.innerText + event.target.innerText
+        cspdiv.innerText = [...chrs.replace(/\s/g, "").toLowerCase()].sort((a, b) => a.localeCompare(b)).join("")
+        event.target.remove()
     }
 }
 
@@ -540,21 +616,30 @@ if (document.getElementById("search-type").value == "regex") {
 let dict = []
 let dictMap = {}
 let fileStats = "Dictionary not loaded"
+let fromSpare = false
+let findErr = ""
 
 const helpText =`
 <p><u>Dictionary</u></p>
-<p>Dictionaries are UTF-8 encoded plain text files of words or phrases with one word or phrase per line.
+<p>Dictionaries are UTF-8 encoded plain text files of words or short phrases with one entry per line.
 You must first load one. Suitable files can usually be found in /usr/share/dict/ on Unix-like systems.
 Multiple dictionaries may be selected in the file input dialog and will be
-combined in memory with duplicate entries removed. Words spelled the same with differing case are
+combined in memory with duplicate entries removed. Entries spelled the same with differing case are
 considered different and are included.</p>
 
 <p><u>Anagrams</u></p>
 <p>Enter any characters to find all anagrams of the same length and shorter.
-Use <code>?</code> as a wildcard to match any character.</p>
+Use <code>?</code> as a wildcard to match any character.
+Entries found may be selected and any unused characters will be shown as "spare".
+Select the unused ones to create a new list.
+When an entry is chosen from that list, it is added to the "found" entries, the list is cleared,
+and the unused characters updated.
+The proces may be repeated until all letters have been used to make words or phrases where possible.
+Select any "found" entry to put it back into "spare".
+Thus you can go back and forth until the desired anagrams are found.</p>
 
 <p><u>Patterns</u></p>
-</>Find words based on character and wildcard patterns. Case is ignored.</p>
+</>Find entries based on character and wildcard patterns. Case is ignored.</p>
 <p><code>?</code> represents any single character:
 <code>p??d</code> will find "paid", "plod", "prod", etc.</p>
 <p><code>*</code> represents zero to many:
@@ -573,7 +658,7 @@ wildcards to find it in phrases.
 Alternatively, use RegEx.</p>
 
 <p><u>RegEx</u></p>
-<p>Find words using javascript regular expressions.
+<p>Find entries using javascript regular expressions.
 This is how the pattern search is implemented and it can be used to include the special characters reserved for that.
 Characters special to regex must be escaped (preceded by <code>\\</code>, e.g: <code>\\?</code> ).
 It's also better for finding whole words in phrases.
