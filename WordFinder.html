@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Finder (v3.0)</title>
+    <title>Word Finder (v4.0)</title>
     <style>
         body {
             font-family: sans-serif;
@@ -168,12 +168,14 @@
                 <button id="search-btn">Search</button>
                 <label for="file-input">Dictionary:</label>
                 <input multiple type="file" id="file-input"/>
-                <span id="dict-name">not loaded</span>
+                <span id="dict-name">(built-in)</span>
             </div>
             <div id="info" class="message"></div>
         </div>
         <div id="results" class="message"></div>
     </div>
+
+<script src="dict.js"></script>
 
 <script>
 
@@ -471,11 +473,12 @@ const handleFileSelection = (event) => {
 }
 
 const handleSearch = () => {
-    if (dict.length <  1) {
+    if (!dict) {
         showMessage("First load a dictionary")
         return
     }
-    const inputWord = document.getElementById("word-input").value //.trim()
+    const inputWord = document.getElementById("word-input").value.trim()
+    document.getElementById("word-input").value = inputWord
     const inputFlags = document.getElementById("flags-input").value.trim()
     const resultsElement = document.getElementById("results")
 
@@ -565,7 +568,7 @@ const handleClick = (event) => {
         else {
             foundiv = document.createElement("div")
             foundiv.id = "found"
-            foundiv.innerText = "found: "
+            foundiv.innerText = "Found: "
             foundiv.style.wordSpacing = "1.5rem"
         }
         const fsdiv = document.createElement("span")
@@ -613,16 +616,23 @@ if (document.getElementById("search-type").value == "regex") {
     document.getElementById("flags-input").style.display = "inline"
 }
 
-let dict = []
+var dict // defined in dict.js
 let dictMap = {}
-let fileStats = "Dictionary not loaded"
+let fileStats = "No dictionary loaded"
+if (dict) {
+    fileStats = `${dict.length} entries in default dictionary`
+}
+else {
+    showMessage("dict.js is missing")
+}
 let fromSpare = false
 let findErr = ""
 
 const helpText =`
 <p><u>Dictionary</u></p>
 <p>Dictionaries are UTF-8 encoded plain text files of words or short phrases with one entry per line.
-You must first load one. Suitable files can usually be found in /usr/share/dict/ on Unix-like systems.
+Use the built-in one of common English and American words or load one of your choice.
+Suitable files can usually be found in /usr/share/dict/ on Unix-like systems.
 Multiple dictionaries may be selected in the file input dialog and will be
 combined in memory with duplicate entries removed. Entries spelled the same with differing case are
 considered different and are included.</p>
@@ -678,6 +688,7 @@ The multiline flag is not relevant.</p>
 <table>
 <tr><td>Contains cat</td><td><code>\\bcat\\b</code></td></tr>
 <tr><td>Contains cat or dog</td><td><code>\\bcat\\b|\\bdog\\b</code></td></tr>
+<tr><td>Three-word phrases</td><td><code>^\\W*(\\w+\\W+){2}\\w+\\W*$</code></td></tr>
 </table>
 
 <p>The pattern examples as regular expressions:</p>
@@ -699,4 +710,3 @@ More info at MDM
 </script>
 </body>
 </html>
-
