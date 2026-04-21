@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Finder (v4.0)</title>
+    <title>Word Finder (v4.1)</title>
     <style>
         body {
             font-family: sans-serif;
@@ -138,7 +138,7 @@
         }
         .message {
             font-size: 1.2rem;
-            padding: 3px 5px 3px 5px;
+            padding: 3px 5px;
             border: 5px solid #eff6eb;
             color: #003C00;
             background-color: #fff;
@@ -148,6 +148,36 @@
         }
         #dict-name:hover, .rs:hover, .fs:hover, #spare:hover {
             background-color: #dcf0d2;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(128,128,128);
+            background-color: rgb(0 0 0 / 0.4);
+        }
+        .modal-content {
+            font-size: 1.2rem;
+            padding: 1rem;
+            border: 5px solid #d2e6c8;
+            color: #003C00;
+            background-color: #fff;
+            margin: 10% auto;
+            width: 85%;
+        }
+        .close {
+            float: right;
+            font-size: 2.0rem;
+            color: #648c64;
+        }
+        .close:hover, .close:focus {
+            color: #006400;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -171,6 +201,9 @@
                 <span id="dict-name">(built-in)</span>
             </div>
             <div id="info" class="message"></div>
+        </div>
+        <div id="modal-bg" class="modal">
+            <div id="modal-win" class="modal-content"></div>
         </div>
         <div id="results" class="message"></div>
     </div>
@@ -382,7 +415,7 @@ const displayResults = (result, resultsElement, point=false) => {
     }
 }
 
-const showMessage = (message, clear=false, mono=false, html=false) => {
+const showMessage = (message, clear=false) => {
     let info = document.getElementById("info")
     let elem = document.getElementById("results")
     if (clear) {
@@ -393,20 +426,9 @@ const showMessage = (message, clear=false, mono=false, html=false) => {
         info.style.display = "block"
         elem = info
     }
-    if (mono) {
-        elem.style.fontFamily="monospace"
-        elem.style.fontSize="1.3rem"
-    }
-    else {
-        elem.style.fontFamily="sans-serif"
-        elem.style.fontSize="1.2rem"
-    }
-    if (html) {
-        elem.innerHTML = message
-    }
-    else {
-        elem.innerText = message
-    }
+    elem.style.fontFamily="sans-serif"
+    elem.style.fontSize="1.2rem"
+    elem.innerText = message
 }
 
 const listFiles = (fileList, words) => {
@@ -532,9 +554,16 @@ const handleInput = (event) => {
 }
 
 const handleClick = (event) => {
-    if (event.target.id == "help-btn") {
-        showMessage(helpText, true, false, true)
-        scrollTo(0,0)
+    if (event.target.id == 'help-btn') {
+        const modw = document.getElementById('modal-win')
+        modw.innerHTML = helpText
+        const modb = document.getElementById('modal-bg')
+        modb.style.display = "block"
+        modb.scrollTo(0, 0)
+    }
+    else if (event.target.id == "modal-close" || event.target.id == "modal-bg") {
+        const modb = document.getElementById("modal-bg")
+        modb.style.display = "none"
     }
     else if (event.target.id == "search-btn") {
         fromSpare = false
@@ -629,7 +658,8 @@ let fromSpare = false
 let findErr = ""
 
 const helpText =`
-<p><u>Dictionary</u></p>
+<div id="modal-close" class="close">&times;</div>
+<p><h3>Dictionary</h3></p>
 <p>Dictionaries are UTF-8 encoded plain text files of words or short phrases with one entry per line.
 Use the built-in one of common English and American words or load one of your choice.
 Suitable files can usually be found in /usr/share/dict/ on Unix-like systems.
@@ -637,7 +667,7 @@ Multiple dictionaries may be selected in the file input dialog and will be
 combined in memory with duplicate entries removed. Entries spelled the same with differing case are
 considered different and are included.</p>
 
-<p><u>Anagrams</u></p>
+<p><h3>Anagrams</h3></p>
 <p>Enter any characters to find all anagrams of the same length and shorter.
 Use <code>?</code> as a wildcard to match any character.
 Entries found may be selected and any unused characters will be shown as "spare".
@@ -648,7 +678,7 @@ The process may be repeated until all letters have been used to make words or ph
 Select any "found" entry to put it back into "spare".
 Thus you can go back and forth until the desired anagrams are found.</p>
 
-<p><u>Patterns</u></p>
+<p><h3>Patterns</h3></p>
 </>Find entries based on character and wildcard patterns. Case is ignored.</p>
 <p><code>?</code> represents any single character:
 <code>p??d</code> will find "paid", "plod", "prod", etc.</p>
@@ -663,11 +693,11 @@ Thus you can go back and forth until the desired anagrams are found.</p>
 <p>Use the next sequential digit to match a different character:<br>
 <code>&nbsp;a11?22</code> will find "abbott" and "access" but not "assess".</p>
 <p>Any other characters are interpreted literally.
-The pattern operates on a whole line so enclose a pattern in <code>*</code>
-wildcards to find it in phrases.
+The pattern operates on the whole entry so enclose a pattern in <code>*</code>
+wildcards to find it within words or phrases.
 Alternatively, use RegEx.</p>
 
-<p><u>RegEx</u></p>
+<p><h3>RegEx</h3></p>
 <p>Find entries using javascript regular expressions.
 This is how the pattern search is implemented and it can be used to include the special characters reserved for that.
 Characters special to regex must be escaped (preceded by <code>\\</code>, e.g: <code>\\?</code> ).
@@ -682,6 +712,15 @@ The multiline flag is not relevant.</p>
 <tr><td>Contains 27</td><td><code>27</code></td></tr>
 <tr><td>Starts with 2</td><td><code>^2</code></td></tr>
 <tr><td>Ends with 2</td><td><code>2$</code></td></tr>
+</table>
+
+<p>Examples for finding characters:</P>
+<table>
+<tr><td>Does not contain a, e, i or s </td><td><code>^[^aeis]+$</code></td></tr>
+<tr><td>Contains non-word characters </td><td><code>[^\\w\\s]</code></td></tr>
+<tr><td>Contains qu</td><td><code>qu</code></td></tr>
+<tr><td>Starts with wh</td><td><code>^wh</code></td></tr>
+<tr><td>Ends with ial</td><td><code>ial$</code></td></tr>
 </table>
 
 <p>Examples for finding words in phrases:</P>
