@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Finder (v4.1)</title>
+    <title>Word Finder (v4.2)</title>
     <style>
         body {
             font-family: sans-serif;
@@ -114,12 +114,11 @@
             padding-bottom: 0.4rem;
             color: #006400;
         }
-        #info {
+        #mesg, #info {
             display:none;
         }
         #results {
             display:none;
-            margin-top: 5px;
         }
         .header {
             word-spacing: normal;
@@ -138,6 +137,7 @@
         }
         .message {
             font-size: 1.2rem;
+            margin-top: 5px;
             padding: 3px 5px;
             border: 5px solid #eff6eb;
             color: #003C00;
@@ -200,6 +200,7 @@
                 <input multiple type="file" id="file-input"/>
                 <span id="dict-name">(built-in)</span>
             </div>
+            <div id="mesg" class="message"></div>
             <div id="info" class="message"></div>
         </div>
         <div id="modal-bg" class="modal">
@@ -214,7 +215,7 @@
 
 "use strict";
 
-const potentialWord = (word, wordCounts, inputCounts) => {
+const potentialWord = (wordCounts, inputCounts) => {
     let wildCard = inputCounts.get("?") || 0
 
     for (const entry of wordCounts.entries()) {
@@ -250,16 +251,16 @@ const charCount = (str) => {
     return counts
 }
 
-const findAnagram = (inputWord, dictionary) => {
+const findAnagram = (word, dictionary) => {
     const start = performance.now()
     const results = {}
-    const inLen = inputWord.length
-    const inputCounts = charCount(inputWord)
+    const inLen = word.length
+    const inputCounts = charCount(word)
 
     for (const entry of dictionary.entries()) {
         const len = entry[0].replace(/\s/g, "").length
         if (len <= inLen) {
-            if (potentialWord(entry[0], entry[1], inputCounts)) {
+            if (potentialWord(entry[1], inputCounts)) {
                 if (!results[len]) {
                     results[len] = []
                 }
@@ -269,7 +270,7 @@ const findAnagram = (inputWord, dictionary) => {
     }
 
     const end = performance.now();
-    console.log(`${inputWord}`, inputCounts,`${(end - start)/1000} sec`)
+    console.log(`${word}`, inputCounts,`${(end - start)/1000} sec`)
     return results
 }
 
@@ -337,11 +338,11 @@ const makeRegex = (str) => {
     return pattern
 }
 
-const findRegex = (inputWord, dictionary, flags="") => {
+const findRegex = (word, dictionary, flags="") => {
     const results = {}
     let pattern
     try {
-        pattern = new RegExp(inputWord, flags);
+        pattern = new RegExp(word, flags);
         console.log(pattern)
     } catch (err) {
         findErr = `${err.name}: ${err.message}`
@@ -373,6 +374,7 @@ const setup = (dictionary) => {
 }
 
 const displayResults = (result, resultsElement, point=false) => {
+    document.getElementById("mesg").style.display = "none"
     const resultArr = Object.keys(result).reverse()
     resultsElement.innerHTML = ""
     for (const len of resultArr) {
@@ -415,20 +417,10 @@ const displayResults = (result, resultsElement, point=false) => {
     }
 }
 
-const showMessage = (message, clear=false) => {
-    let info = document.getElementById("info")
-    let elem = document.getElementById("results")
-    if (clear) {
-        info.style.display = "none"
-        elem.style.display = "block"
-    }
-    else {
-        info.style.display = "block"
-        elem = info
-    }
-    elem.style.fontFamily="sans-serif"
-    elem.style.fontSize="1.2rem"
+const showMessage = (message) => {
+    let elem = document.getElementById("mesg")
     elem.innerText = message
+    elem.style.display = "block"
 }
 
 const listFiles = (fileList, words) => {
@@ -450,9 +442,9 @@ const handleFileSelection = (event) => {
     if (fileList.length < 1) {
         return
     }
-
-    document.getElementById("results").style.display = "none"
     showMessage("Loading...")
+    document.getElementById("results").style.display = "none"
+    document.getElementById("info").style.display = "none"
 
     const dn = document.getElementById("dict-name")
     if (fileList.length > 1) {
@@ -499,13 +491,15 @@ const handleSearch = () => {
         showMessage("First load a dictionary")
         return
     }
-    const inputWord = document.getElementById("word-input").value.trim()
+    inputWord = document.getElementById("word-input").value.trim()
     document.getElementById("word-input").value = inputWord
-    const inputFlags = document.getElementById("flags-input").value.trim()
     const resultsElement = document.getElementById("results")
+    resultsElement.style.display = "none"
+    document.getElementById("info").style.display = "none"
+    fromSpare = false
 
     if (inputWord) {
-        showMessage("Searching...", true)
+        showMessage("Searching...")
         setTimeout(() => {
             const searchType = document.getElementById("search-type").value
             let point = false
@@ -515,7 +509,7 @@ const handleSearch = () => {
                 if (pattern) result = findRegex (pattern, dict, "i")
             }
             else if (searchType == "regex") {
-                result = findRegex(inputWord, dict, inputFlags)
+                result = findRegex(inputWord, dict, document.getElementById("flags-input").value.trim())
             }
             else if (searchType == "anagram") {
                 if (!dictMap.size) dictMap = setup(dict);
@@ -523,7 +517,7 @@ const handleSearch = () => {
                 point = true
             }
             if (findErr) {
-                showMessage(findErr, true)
+                showMessage(findErr)
                 findErr = ""
             }
             else {
@@ -566,22 +560,19 @@ const handleClick = (event) => {
         modb.style.display = "none"
     }
     else if (event.target.id == "search-btn") {
-        fromSpare = false
         handleSearch()
     }
     else if (event.target.id == "dict-name") {
-        if (fromSpare) {
-            document.getElementById("results").style.display = "none"
-        }
         showMessage(fileStats)
     }
     else if (event.target.className == "rs") {
+        document.getElementById("mesg").style.display = "none"
         let inp
         if (fromSpare) {
             inp = document.getElementById("spare").innerText
         }
         else {
-            inp = document.getElementById("word-input").value.replace(/\s/g, "").toLowerCase()
+            inp = inputWord.replace(/\s/g, "").toLowerCase()
         }
         let word = event.target.innerText
         const chrs = word.replace(/\s/g, "").toLowerCase()
@@ -629,6 +620,7 @@ const handleClick = (event) => {
         displayResults(result, resultsElement, true)
     }
     else if (event.target.className == "fs") {
+        document.getElementById("mesg").style.display = "none"
         const cspdiv = document.getElementById("spare")
         let chrs = cspdiv.innerText + event.target.innerText
         cspdiv.innerText = [...chrs.replace(/\s/g, "").toLowerCase()].sort((a, b) => a.localeCompare(b)).join("")
@@ -652,8 +644,9 @@ if (dict) {
     fileStats = `${dict.length} entries in default dictionary`
 }
 else {
-    showMessage("dict.js is missing")
+    showMessage("dict.js is missing or corrupt")
 }
+let inputWord = ""
 let fromSpare = false
 let findErr = ""
 
