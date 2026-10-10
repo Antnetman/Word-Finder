@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Finder (v4.2)</title>
+    <title>Word Finder (v4.3)</title>
     <style>
         body {
             font-family: sans-serif;
@@ -194,6 +194,7 @@
                     <option value="anagram">Anagrams</option>
                     <option value="pattern">Patterns</option>
                     <option value="regex">RegEx</option>
+                    <option value="clear">(Clear)</option>
                 </select>
                 <button id="search-btn">Search</button>
                 <label for="file-input">Dictionary:</label>
@@ -531,12 +532,17 @@ const handleSearch = () => {
 }
 
 const handleSearchType = (event) => {
+    if (event.target.value == "clear") {
+        document.getElementById("word-input").value = ""
+        event.target.value = prevSearch
+    }
     if (event.target.value == "regex") {
         document.getElementById("flags-input").style.display = "inline"
     }
     else {
         document.getElementById("flags-input").style.display = "none"
     }
+    prevSearch = event.target.value
 }
 
 const handleInput = (event) => {
@@ -548,10 +554,10 @@ const handleInput = (event) => {
 }
 
 const handleClick = (event) => {
-    if (event.target.id == 'help-btn') {
-        const modw = document.getElementById('modal-win')
+    if (event.target.id == "help-btn") {
+        const modw = document.getElementById("modal-win")
         modw.innerHTML = helpText
-        const modb = document.getElementById('modal-bg')
+        const modb = document.getElementById("modal-bg")
         modb.style.display = "block"
         modb.scrollTo(0, 0)
     }
@@ -649,6 +655,7 @@ else {
 let inputWord = ""
 let fromSpare = false
 let findErr = ""
+let prevSearch = document.getElementById("search-type").value
 
 const helpText =`
 <div id="modal-close" class="close">&times;</div>
@@ -672,7 +679,7 @@ Select any "found" entry to put it back into "spare".
 Thus you can go back and forth until the desired anagrams are found.</p>
 
 <p><h3>Patterns</h3></p>
-</>Find entries based on character and wildcard patterns. Case is ignored.</p>
+<p>Find entries based on character and wildcard patterns. Case is ignored.</p>
 <p><code>?</code> represents any single character:
 <code>p??d</code> will find "paid", "plod", "prod", etc.</p>
 <p><code>*</code> represents zero to many:
@@ -738,6 +745,9 @@ The multiline flag is not relevant.</p>
 <p><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions">
 More info at MDM
 </a></p>
+
+<p><h3>(Clear)</h3></p>
+<p>Clears the input field.</p>
 `
 </script>
 </body>
